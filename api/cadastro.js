@@ -100,7 +100,7 @@ async function cadastrarContato(dados) {
           'User-Agent': 'Neuronio-Form/1.0'
         },
         body: JSON.stringify({
-          idGrupos: segmentacoes.join(', ')
+          idGrupos: segmentacoes.join(',')
         })
       });
 
