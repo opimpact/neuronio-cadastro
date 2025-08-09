@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/cadastro.js": {
+      "maxDuration": 30
+    }
+  }
+}
