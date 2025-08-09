@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "description": "Formulário de cadastro integrado com Nitronews",
   "engines": {
-    "node": "18.x"
+    "node": "22.x"
   }
 }
