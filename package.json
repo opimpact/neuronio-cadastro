@@ -2,10 +2,7 @@
   "name": "neuronio-cadastro",
   "version": "1.0.0",
   "description": "Formulário de cadastro integrado com Nitronews",
-  "dependencies": {
-    "node-fetch": "^2.6.7"
-  },
   "engines": {
-    "node": ">=14"
+    "node": "18.x"
   }
 }
