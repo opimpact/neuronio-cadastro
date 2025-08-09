@@ -1,68 +1,103 @@
-// api/cadastro.js - Backend para integração com Nitronews
-const fetch = require('node-fetch');
-
+// api/cadastro.js - Backend corrigido para Vercel
 async function cadastrarContato(dados) {
   const API_BASE_URL = 'https://api.criaenvio.com/v1';
   const API_KEY = process.env.NITRONEWS_API_KEY;
   
-  console.log('Iniciando cadastro para:', dados.email);
+  console.log('=== INICIO CADASTRO ===');
+  console.log('Email:', dados.email);
+  console.log('API_KEY existe:', !!API_KEY);
   
   if (!API_KEY) {
-    throw new Error('Chave da API não configurada no servidor');
+    throw new Error('Chave da API não configurada');
   }
 
   try {
-    // 1. Criar ou atualizar contato
+    // 1. Criar contato
     const contatoData = {
       nome: dados.nome,
       email: dados.email
     };
 
-    console.log('Criando contato:', contatoData);
+    console.log('Dados para criar:', contatoData);
+    const createUrl = `${API_BASE_URL}/contatos?chave=${encodeURIComponent(API_KEY)}`;
+    console.log('URL da requisição:', createUrl.substring(0, 50) + '...');
 
-    const createResponse = await fetch(`${API_BASE_URL}/contatos?chave=${encodeURIComponent(API_KEY)}`, {
+    const createResponse = await fetch(createUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'User-Agent': 'Neuronio-Form/1.0'
       },
       body: JSON.stringify(contatoData)
     });
 
-    const contactResult = await createResponse.json();
+    console.log('Status da resposta:', createResponse.status);
+    console.log('Headers da resposta:', Object.fromEntries(createResponse.headers.entries()));
+
+    let responseText;
+    try {
+      responseText = await createResponse.text();
+      console.log('Texto da resposta:', responseText.substring(0, 200));
+    } catch (e) {
+      console.error('Erro ao ler resposta:', e);
+      throw new Error('Erro ao ler resposta da API');
+    }
+
+    let contactResult;
+    try {
+      contactResult = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Erro ao fazer parse JSON:', e);
+      console.error('Resposta recebida:', responseText);
+      throw new Error('API retornou resposta inválida: ' + responseText.substring(0, 100));
+    }
+
     let contatoId;
 
     if (!createResponse.ok) {
-      // Se contato já existe, buscar ID
       if (contactResult.error?.message?.includes('Já existe um contato com este email')) {
-        console.log('Contato já existe, buscando ID...');
-        const searchResponse = await fetch(`${API_BASE_URL}/contatos?chave=${encodeURIComponent(API_KEY)}&email=${encodeURIComponent(dados.email)}`);
-        const searchResult = await searchResponse.json();
+        console.log('Contato já existe, buscando...');
+        const searchUrl = `${API_BASE_URL}/contatos?chave=${encodeURIComponent(API_KEY)}&email=${encodeURIComponent(dados.email)}`;
+        
+        const searchResponse = await fetch(searchUrl, {
+          headers: {
+            'User-Agent': 'Neuronio-Form/1.0'
+          }
+        });
+        
+        const searchText = await searchResponse.text();
+        const searchResult = JSON.parse(searchText);
         
         if (searchResult.data && searchResult.data.length > 0) {
           contatoId = searchResult.data[0].id;
           console.log('Contato encontrado, ID:', contatoId);
         } else {
-          throw new Error('Não foi possível encontrar o contato existente');
+          throw new Error('Contato não encontrado após busca');
         }
       } else {
-        throw new Error(contactResult.error?.message || 'Erro ao criar contato');
+        console.error('Erro da API:', contactResult);
+        throw new Error(contactResult.error?.message || 'Erro ao criar contato: ' + createResponse.status);
       }
     } else {
       contatoId = contactResult.data.id;
       console.log('Novo contato criado, ID:', contatoId);
     }
 
-    // 2. Criar segmentações baseadas nas respostas
+    // 2. Criar segmentações
+    console.log('Criando segmentações...');
     const segmentacoes = await criarSegmentacoes(dados, API_KEY);
-    console.log('Segmentações criadas:', segmentacoes);
+    console.log('Segmentações criadas:', segmentacoes.length);
     
     // 3. Inscrever nas segmentações
     if (segmentacoes.length > 0) {
       console.log('Inscrevendo nas segmentações...');
-      const inscricaoResponse = await fetch(`${API_BASE_URL}/contatos/${contatoId}/inscrever?chave=${encodeURIComponent(API_KEY)}`, {
+      const inscricaoUrl = `${API_BASE_URL}/contatos/${contatoId}/inscrever?chave=${encodeURIComponent(API_KEY)}`;
+      
+      const inscricaoResponse = await fetch(inscricaoUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'User-Agent': 'Neuronio-Form/1.0'
         },
         body: JSON.stringify({
           idGrupos: segmentacoes.join(', ')
@@ -70,22 +105,25 @@ async function cadastrarContato(dados) {
       });
 
       if (!inscricaoResponse.ok) {
-        const inscricaoResult = await inscricaoResponse.json();
-        console.warn('Aviso ao inscrever em segmentações:', inscricaoResult.error?.message);
+        const inscricaoText = await inscricaoResponse.text();
+        console.warn('Aviso segmentações:', inscricaoText);
       } else {
         console.log('Inscrito com sucesso nas segmentações');
       }
     }
 
+    console.log('=== CADASTRO CONCLUÍDO ===');
     return { 
       success: true, 
       contatoId, 
-      segmentacoes,
+      segmentacoes: segmentacoes.length,
       message: 'Cadastro realizado com sucesso!'
     };
 
   } catch (error) {
-    console.error('Erro no cadastro:', error);
+    console.error('=== ERRO NO CADASTRO ===');
+    console.error('Mensagem:', error.message);
+    console.error('Stack:', error.stack);
     throw error;
   }
 }
@@ -93,9 +131,7 @@ async function cadastrarContato(dados) {
 async function criarSegmentacoes(dados, API_KEY) {
   const segmentacoesIds = [];
   
-  // Mapeamento de perfis e interesses para nomes de segmentação
-  const mapeamentoSegmentacoes = {
-    // Perfis
+  const mapeamento = {
     'setor-publico': 'Setor Público',
     'setor-privado': 'Setor Privado', 
     'setor-social': 'Setor Social',
@@ -104,108 +140,118 @@ async function criarSegmentacoes(dados, API_KEY) {
     'estudante': 'Estudantes',
     'jornalista': 'Jornalistas',
     'pesquisador': 'Pesquisadores Acadêmicos',
-    
-    // Interesses
     'investimento-social': 'Interesse: Investimento Social',
     'empreendedorismo': 'Interesse: Empreendedorismo',
     'inovacao': 'Interesse: Inovação',
     'saude': 'Interesse: Saúde',
     'sustentabilidade': 'Interesse: Sustentabilidade',
-    'oportunidades-impacto': 'Interesse: Oportunidades de Impacto',
-    
-    // Institucional
-    'info-institucional': 'Informações Institucionais Neurônio'
+    'oportunidades-impacto': 'Interesse: Oportunidades de Impacto'
   };
 
-  // Criar segmentações para perfis selecionados
+  // Perfis
   for (const perfil of dados.perfis || []) {
-    if (mapeamentoSegmentacoes[perfil]) {
-      const segmentacaoId = await obterOuCriarSegmentacao(mapeamentoSegmentacoes[perfil], API_KEY);
-      if (segmentacaoId) segmentacoesIds.push(segmentacaoId);
+    if (mapeamento[perfil]) {
+      const id = await obterOuCriarSegmentacao(mapeamento[perfil], API_KEY);
+      if (id) segmentacoesIds.push(id);
     }
   }
 
-  // Criar segmentações para interesses selecionados  
+  // Interesses
   for (const interesse of dados.interesses || []) {
-    if (mapeamentoSegmentacoes[interesse]) {
-      const segmentacaoId = await obterOuCriarSegmentacao(mapeamentoSegmentacoes[interesse], API_KEY);
-      if (segmentacaoId) segmentacoesIds.push(segmentacaoId);
+    if (mapeamento[interesse]) {
+      const id = await obterOuCriarSegmentacao(mapeamento[interesse], API_KEY);
+      if (id) segmentacoesIds.push(id);
     }
   }
 
-  // Informações institucionais
+  // Institucional
   if (dados.infoInstitucional) {
-    const segmentacaoId = await obterOuCriarSegmentacao(mapeamentoSegmentacoes['info-institucional'], API_KEY);
-    if (segmentacaoId) segmentacoesIds.push(segmentacaoId);
+    const id = await obterOuCriarSegmentacao('Informações Institucionais Neurônio', API_KEY);
+    if (id) segmentacoesIds.push(id);
   }
 
   return segmentacoesIds;
 }
 
-async function obterOuCriarSegmentacao(nomeSegmentacao, API_KEY) {
+async function obterOuCriarSegmentacao(nome, API_KEY) {
   const API_BASE_URL = 'https://api.criaenvio.com/v1';
 
   try {
-    // Buscar segmentação existente
-    const searchResponse = await fetch(`${API_BASE_URL}/grupos?chave=${encodeURIComponent(API_KEY)}&nome=${encodeURIComponent(nomeSegmentacao)}`);
-    const searchResult = await searchResponse.json();
+    // Buscar existente
+    const searchUrl = `${API_BASE_URL}/grupos?chave=${encodeURIComponent(API_KEY)}&nome=${encodeURIComponent(nome)}`;
+    
+    const searchResponse = await fetch(searchUrl, {
+      headers: {
+        'User-Agent': 'Neuronio-Form/1.0'
+      }
+    });
+    
+    const searchText = await searchResponse.text();
+    const searchResult = JSON.parse(searchText);
 
     if (searchResult.data && searchResult.data.length > 0) {
-      console.log(`Segmentação "${nomeSegmentacao}" já existe`);
+      console.log(`Segmentação "${nome}" já existe`);
       return searchResult.data[0].id;
     }
 
-    // Criar nova segmentação se não existir
-    console.log(`Criando nova segmentação: "${nomeSegmentacao}"`);
-    const createResponse = await fetch(`${API_BASE_URL}/grupos?chave=${encodeURIComponent(API_KEY)}`, {
+    // Criar nova
+    console.log(`Criando segmentação: "${nome}"`);
+    const createUrl = `${API_BASE_URL}/grupos?chave=${encodeURIComponent(API_KEY)}`;
+    
+    const createResponse = await fetch(createUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'User-Agent': 'Neuronio-Form/1.0'
       },
-      body: JSON.stringify({
-        nome: nomeSegmentacao
-      })
+      body: JSON.stringify({ nome })
     });
 
-    const createResult = await createResponse.json();
-    
     if (createResponse.ok) {
-      console.log(`Segmentação "${nomeSegmentacao}" criada com ID:`, createResult.data.id);
+      const createText = await createResponse.text();
+      const createResult = JSON.parse(createText);
+      console.log(`Segmentação "${nome}" criada com ID:`, createResult.data.id);
       return createResult.data.id;
     } else {
-      console.error('Erro ao criar segmentação:', createResult.error?.message);
-      return null;
+      const errorText = await createResponse.text();
+      console.error(`Erro ao criar segmentação "${nome}":`, errorText);
     }
 
   } catch (error) {
-    console.error('Erro ao obter/criar segmentação:', error);
-    return null;
+    console.error(`Erro ao processar segmentação "${nome}":`, error);
   }
+  return null;
 }
 
-// Função principal do Vercel
 module.exports = async (req, res) => {
   // Configurar CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Responder OPTIONS (preflight)
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Apenas aceitar POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método não permitido' });
   }
 
   try {
-    console.log('Recebendo requisição de cadastro:', req.body);
+    console.log('=== NOVA REQUISIÇÃO ===');
+    console.log('Headers:', req.headers);
+    console.log('Body recebido:', JSON.stringify(req.body, null, 2));
+    
     const resultado = await cadastrarContato(req.body);
+    console.log('Resultado final:', resultado);
+    
     res.status(200).json(resultado);
   } catch (error) {
-    console.error('Erro na API:', error);
-    res.status(500).json({ error: error.message });
+    console.error('=== ERRO NA API ===');
+    console.error('Erro:', error.message);
+    res.status(500).json({ 
+      error: error.message,
+      details: 'Verifique os logs para mais informações'
+    });
   }
 };
