@@ -170,6 +170,7 @@ async function fetchWithRetry(url, options = {}, maxRetries = 3) {
 }
 
 async function criarSegmentacoesSimples(dados, API_KEY) {
+  const API_BASE_URL = 'https://api.criaenvio.com/v1';
   const segmentacoesIds = [];
   
   // Lista de segmentações possíveis
