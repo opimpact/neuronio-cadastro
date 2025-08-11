@@ -207,12 +207,14 @@ async function criarSegmentacoesSimples(dados, API_KEY) {
     ...(dados.infoInstitucional ? ['Informações Institucionais Neurônio'] : [])
   ];
 
-  console.log('Segmentações a criar/buscar:', segmentacoesIds);
+  console.log('Segmentações a criar/buscar:', segmentacoesPossiveis);
 
   // Para cada segmentação, tentar criar ou buscar (simplificado)
   for (const nomeSegmentacao of segmentacoesPossiveis) {
     try {
-      // Criar a segmentação (se já existir, vai dar erro mas não importa)
+      
+      // Buscar primeiro se a segmentação já existe
+      console.log(`Processando segmentação: "${nomeSegmentacao}"`);
       const createUrl = `${API_BASE_URL}/grupos?chave=${encodeURIComponent(API_KEY)}`;
       
       const createResponse = await fetchWithRetry(createUrl, {
