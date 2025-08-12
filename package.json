@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "vercel dev",
-    "build": "echo 'Build completed'",
+    "build": "mkdir -p public && echo 'Build completed'",
     "start": "vercel dev"
   }
 }
