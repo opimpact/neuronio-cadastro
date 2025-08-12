@@ -191,10 +191,10 @@ async function inscreverEmTodasSegmentacoes(contatoId, segmentacoes, API_KEY, AP
       erros.push(segmentacaoId);
     }
 
-    // Delay de 1.5s entre inscrições (um pouco menor já que são requisições mais simples)
+    // Delay de 2s entre inscrições (mesmo delay para evitar rate limiting)
     if (i < segmentacoes.length - 1) {
-      console.log('Aguardando 1.5s...');
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      console.log('Aguardando 2s...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
 
