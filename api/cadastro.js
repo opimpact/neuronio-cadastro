@@ -1,4 +1,4 @@
-// api/cadastro.js - Versão final com melhor compatibilidade
+// api/cadastro.js - Versão otimizada com rate limiting correto
 async function cadastrarContato(dados) {
   const API_BASE_URL = 'https://api.criaenvio.com/v1';
   const API_KEY = process.env.NITRONEWS_API_KEY;
@@ -11,128 +11,19 @@ async function cadastrarContato(dados) {
     throw new Error('Chave da API não configurada');
   }
 
-  // Aguardar um pouco para evitar rate limiting
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
   try {
-    // 1. Criar contato com retry
-    const contatoData = {
-      nome: dados.nome,
-      email: dados.email
-    };
-
-    console.log('Tentando criar contato:', contatoData);
-    let contactResult;
-    let contatoId;
-
-    // Primeiro, vamos tentar buscar se o contato já existe
-    try {
-      const searchUrl = `${API_BASE_URL}/contatos?chave=${encodeURIComponent(API_KEY)}&email=${encodeURIComponent(dados.email)}`;
-      console.log('Buscando contato existente...');
-      
-      const searchResponse = await fetchWithRetry(searchUrl, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      });
-
-      if (searchResponse.ok) {
-        const searchText = await searchResponse.text();
-        console.log('Resposta busca (primeiros 200 chars):', searchText.substring(0, 200));
-        
-        if (searchText.trim().startsWith('{')) {
-          const searchResult = JSON.parse(searchText);
-          if (searchResult.data && searchResult.data.length > 0) {
-            contatoId = searchResult.data[0].id;
-            console.log('Contato encontrado, ID:', contatoId);
-          }
-        }
-      }
-    } catch (searchError) {
-      console.warn('Erro na busca, tentando criar:', searchError.message);
-    }
-
-    // Se não encontrou, tentar criar
-    if (!contatoId) {
-      console.log('Criando novo contato...');
-      const createUrl = `${API_BASE_URL}/contatos?chave=${encodeURIComponent(API_KEY)}`;
-      
-      const createResponse = await fetchWithRetry(createUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        },
-        body: JSON.stringify(contatoData)
-      });
-
-      const responseText = await createResponse.text();
-      console.log('Resposta criação (primeiros 200 chars):', responseText.substring(0, 200));
-      console.log('Status:', createResponse.status);
-
-      if (responseText.trim().startsWith('{')) {
-        contactResult = JSON.parse(responseText);
-        
-        if (createResponse.ok) {
-          contatoId = contactResult.data.id;
-          console.log('Novo contato criado, ID:', contatoId);
-        } else if (contactResult.error?.message?.includes('Já existe um contato com este email')) {
-          console.log('Contato já existe (via erro), tentando buscar novamente...');
-          // Tentar buscar novamente
-          const searchUrl = `${API_BASE_URL}/contatos?chave=${encodeURIComponent(API_KEY)}&email=${encodeURIComponent(dados.email)}`;
-          const searchResponse = await fetchWithRetry(searchUrl);
-          const searchText = await searchResponse.text();
-          
-          if (searchText.trim().startsWith('{')) {
-            const searchResult = JSON.parse(searchText);
-            if (searchResult.data && searchResult.data.length > 0) {
-              contatoId = searchResult.data[0].id;
-            }
-          }
-        }
-      } else {
-        console.error('API retornou HTML em vez de JSON');
-        throw new Error('Erro na comunicação com API: resposta em formato inválido');
-      }
-    }
-
-    if (!contatoId) {
-      throw new Error('Não foi possível obter ou criar contato');
-    }
-
-    // 2. Criar segmentações (simplificado)
-    const segmentacoes = await criarSegmentacoesSimples(dados, API_KEY);
-    console.log('Segmentações processadas:', segmentacoes.length);
+    // 1. Processar contato primeiro
+    const contatoId = await processarContato(dados, API_KEY, API_BASE_URL);
+    console.log('Contato processado, ID:', contatoId);
+    
+    // 2. Processar segmentações com rate limiting inteligente
+    const segmentacoes = await processarSegmentacoes(dados, API_KEY, API_BASE_URL);
+    console.log('Segmentações criadas:', segmentacoes.length);
     
     // 3. Inscrever nas segmentações se existirem
+    let inscricaoSucesso = false;
     if (segmentacoes.length > 0) {
-      try {
-        console.log('Inscrevendo nas segmentações...');
-        const inscricaoUrl = `${API_BASE_URL}/contatos/${contatoId}/inscrever?chave=${encodeURIComponent(API_KEY)}`;
-        
-        const inscricaoResponse = await fetchWithRetry(inscricaoUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          },
-          body: JSON.stringify({
-            idGrupos: segmentacoes.join(', ')
-          })
-        });
-
-        if (inscricaoResponse.ok) {
-          console.log('Inscrito com sucesso nas segmentações');
-        } else {
-          console.warn('Aviso ao inscrever nas segmentações:', inscricaoResponse.status);
-        }
-      } catch (inscricaoError) {
-        console.warn('Erro na inscrição em segmentações:', inscricaoError.message);
-      }
+      inscricaoSucesso = await inscreverNasSegmentacoes(contatoId, segmentacoes, API_KEY, API_BASE_URL);
     }
 
     console.log('=== CADASTRO CONCLUÍDO ===');
@@ -140,7 +31,8 @@ async function cadastrarContato(dados) {
       success: true, 
       contatoId, 
       segmentacoes: segmentacoes.length,
-      message: 'Cadastro realizado com sucesso! Contato adicionado às segmentações selecionadas.'
+      inscrito: inscricaoSucesso,
+      message: `Cadastro realizado com sucesso! Contato adicionado a ${segmentacoes.length} segmentação(ões).`
     };
 
   } catch (error) {
@@ -150,101 +42,271 @@ async function cadastrarContato(dados) {
   }
 }
 
-async function fetchWithRetry(url, options = {}, maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      if (i > 0) {
-        console.log(`Tentativa ${i + 1} de ${maxRetries}...`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+async function processarContato(dados, API_KEY, API_BASE_URL) {
+  console.log('Processando contato...');
+  
+  // Buscar contato existente primeiro
+  try {
+    const searchUrl = `${API_BASE_URL}/contatos?chave=${encodeURIComponent(API_KEY)}&email=${encodeURIComponent(dados.email)}`;
+    const searchResponse = await fetchComRateLimit(searchUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Neuronio-Form/1.0'
       }
+    });
+
+    if (searchResponse.ok) {
+      const searchText = await searchResponse.text();
+      if (searchText.trim().startsWith('{')) {
+        const searchResult = JSON.parse(searchText);
+        if (searchResult.data && searchResult.data.length > 0) {
+          console.log('Contato encontrado:', searchResult.data[0].id);
+          return searchResult.data[0].id;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Erro na busca de contato:', error.message);
+  }
+
+  // Se não encontrou, criar novo contato
+  console.log('Criando novo contato...');
+  const createUrl = `${API_BASE_URL}/contatos?chave=${encodeURIComponent(API_KEY)}`;
+  
+  const createResponse = await fetchComRateLimit(createUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': 'Neuronio-Form/1.0'
+    },
+    body: JSON.stringify({
+      nome: dados.nome,
+      email: dados.email
+    })
+  });
+
+  const responseText = await createResponse.text();
+  
+  if (responseText.trim().startsWith('{')) {
+    const result = JSON.parse(responseText);
+    
+    if (createResponse.ok && result.data?.id) {
+      console.log('Novo contato criado:', result.data.id);
+      return result.data.id;
+    } else if (result.error?.message?.includes('Já existe um contato com este email')) {
+      // Tentar buscar novamente se já existe
+      const searchUrl = `${API_BASE_URL}/contatos?chave=${encodeURIComponent(API_KEY)}&email=${encodeURIComponent(dados.email)}`;
+      const searchResponse = await fetchComRateLimit(searchUrl);
+      const searchText = await searchResponse.text();
+      
+      if (searchText.trim().startsWith('{')) {
+        const searchResult = JSON.parse(searchText);
+        if (searchResult.data && searchResult.data.length > 0) {
+          return searchResult.data[0].id;
+        }
+      }
+    }
+  }
+  
+  throw new Error('Não foi possível criar ou encontrar o contato');
+}
+
+async function processarSegmentacoes(dados, API_KEY, API_BASE_URL) {
+  console.log('Iniciando processamento de segmentações...');
+  
+  // Mapear seleções para nomes de segmentações
+  const segmentacoesDesejadas = [];
+  
+  // Perfis profissionais
+  const mapaPerfis = {
+    'setor-publico': 'Setor Público',
+    'setor-privado': 'Setor Privado',
+    'setor-social': 'Setor Social',
+    'empreendedor': 'Empreendedores',
+    'consultor': 'Consultores',
+    'estudante': 'Estudantes',
+    'jornalista': 'Jornalistas',
+    'pesquisador': 'Pesquisadores Acadêmicos'
+  };
+  
+  for (const perfil of dados.perfis || []) {
+    if (mapaPerfis[perfil]) {
+      segmentacoesDesejadas.push(mapaPerfis[perfil]);
+    }
+  }
+  
+  // Temas de interesse
+  const mapaInteresses = {
+    'investimento-social': 'Interesse: Investimento Social',
+    'empreendedorismo': 'Interesse: Empreendedorismo',
+    'inovacao': 'Interesse: Inovação',
+    'saude': 'Interesse: Saúde',
+    'sustentabilidade': 'Interesse: Sustentabilidade',
+    'oportunidades-impacto': 'Interesse: Oportunidades de Impacto'
+  };
+  
+  for (const interesse of dados.interesses || []) {
+    if (mapaInteresses[interesse]) {
+      segmentacoesDesejadas.push(mapaInteresses[interesse]);
+    }
+  }
+  
+  // Informações institucionais
+  if (dados.infoInstitucional) {
+    segmentacoesDesejadas.push('Informações Institucionais Neurônio');
+  }
+  
+  console.log(`Total de segmentações para processar: ${segmentacoesDesejadas.length}`);
+  console.log('Segmentações:', segmentacoesDesejadas);
+  
+  const segmentacoesCriadas = [];
+  
+  // Processar cada segmentação com delay adequado
+  for (let i = 0; i < segmentacoesDesejadas.length; i++) {
+    const nomeSegmentacao = segmentacoesDesejadas[i];
+    console.log(`[${i + 1}/${segmentacoesDesejadas.length}] Processando: "${nomeSegmentacao}"`);
+    
+    try {
+      const segmentacaoId = await obterOuCriarSegmentacao(nomeSegmentacao, API_KEY, API_BASE_URL);
+      if (segmentacaoId) {
+        segmentacoesCriadas.push(segmentacaoId);
+        console.log(`✅ Segmentação "${nomeSegmentacao}" processada: ${segmentacaoId}`);
+      }
+    } catch (error) {
+      console.error(`❌ Erro ao processar "${nomeSegmentacao}":`, error.message);
+    }
+    
+    // Delay entre segmentações (respeitando rate limit)
+    if (i < segmentacoesDesejadas.length - 1) {
+      console.log('Aguardando 2 segundos...');
+      await sleep(2000);
+    }
+  }
+  
+  return segmentacoesCriadas;
+}
+
+async function obterOuCriarSegmentacao(nome, API_KEY, API_BASE_URL) {
+  // Primeiro, buscar se já existe
+  try {
+    const searchUrl = `${API_BASE_URL}/grupos?chave=${encodeURIComponent(API_KEY)}&nome=${encodeURIComponent(nome)}`;
+    const searchResponse = await fetchComRateLimit(searchUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Neuronio-Form/1.0'
+      }
+    });
+
+    if (searchResponse.ok) {
+      const searchText = await searchResponse.text();
+      if (searchText.trim().startsWith('{')) {
+        const searchResult = JSON.parse(searchText);
+        if (searchResult.data && searchResult.data.length > 0) {
+          console.log(`Segmentação "${nome}" já existe:`, searchResult.data[0].id);
+          return searchResult.data[0].id;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(`Erro ao buscar segmentação "${nome}":`, error.message);
+  }
+
+  // Se não existe, criar nova
+  console.log(`Criando nova segmentação: "${nome}"`);
+  const createUrl = `${API_BASE_URL}/grupos?chave=${encodeURIComponent(API_KEY)}`;
+  
+  const createResponse = await fetchComRateLimit(createUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': 'Neuronio-Form/1.0'
+    },
+    body: JSON.stringify({ nome })
+  });
+
+  const responseText = await createResponse.text();
+  
+  if (responseText.trim().startsWith('{')) {
+    const result = JSON.parse(responseText);
+    if (createResponse.ok && result.data?.id) {
+      console.log(`Nova segmentação "${nome}" criada:`, result.data.id);
+      return result.data.id;
+    }
+  }
+  
+  return null;
+}
+
+async function inscreverNasSegmentacoes(contatoId, segmentacoes, API_KEY, API_BASE_URL) {
+  if (segmentacoes.length === 0) return false;
+  
+  console.log(`Inscrevendo contato ${contatoId} nas ${segmentacoes.length} segmentações...`);
+  
+  try {
+    const inscricaoUrl = `${API_BASE_URL}/contatos/${contatoId}/inscrever?chave=${encodeURIComponent(API_KEY)}`;
+    
+    const inscricaoResponse = await fetchComRateLimit(inscricaoUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'Neuronio-Form/1.0'
+      },
+      body: JSON.stringify({
+        idGrupos: segmentacoes.join(', ')
+      })
+    });
+
+    if (inscricaoResponse.ok) {
+      console.log('✅ Inscrição realizada com sucesso');
+      return true;
+    } else {
+      console.warn('⚠️ Problema na inscrição, status:', inscricaoResponse.status);
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Erro na inscrição:', error.message);
+    return false;
+  }
+}
+
+async function fetchComRateLimit(url, options = {}, maxRetries = 3) {
+  for (let tentativa = 1; tentativa <= maxRetries; tentativa++) {
+    try {
+      console.log(`Fazendo requisição (tentativa ${tentativa}): ${url.substring(0, 70)}...`);
       
       const response = await fetch(url, options);
+      
+      // Se recebeu 429 (rate limit), aguardar mais tempo
+      if (response.status === 429) {
+        const waitTime = tentativa * 3000; // 3s, 6s, 9s
+        console.log(`⚠️ Rate limit detectado (429). Aguardando ${waitTime}ms antes de tentar novamente...`);
+        await sleep(waitTime);
+        continue;
+      }
+      
+      // Para outros erros HTTP, retornar a resposta
       return response;
+      
     } catch (error) {
-      console.warn(`Tentativa ${i + 1} falhou:`, error.message);
-      if (i === maxRetries - 1) {
+      console.warn(`Tentativa ${tentativa} falhou:`, error.message);
+      
+      if (tentativa === maxRetries) {
         throw error;
       }
+      
+      // Aguardar antes da próxima tentativa
+      await sleep(tentativa * 1000);
     }
   }
 }
 
-async function criarSegmentacoesSimples(dados, API_KEY) {
-  const API_BASE_URL = 'https://api.criaenvio.com/v1';
-  const segmentacoesIds = [];
-  
-  // Lista de segmentações possíveis
-  const segmentacoesPossiveis = [
-    // Perfis
-    ...(dados.perfis || []).map(p => {
-      const map = {
-        'setor-publico': 'Setor Público',
-        'setor-privado': 'Setor Privado', 
-        'setor-social': 'Setor Social',
-        'empreendedor': 'Empreendedores',
-        'consultor': 'Consultores',
-        'estudante': 'Estudantes',
-        'jornalista': 'Jornalistas',
-        'pesquisador': 'Pesquisadores Acadêmicos'
-      };
-      return map[p];
-    }).filter(Boolean),
-    
-    // Interesses
-    ...(dados.interesses || []).map(i => {
-      const map = {
-        'investimento-social': 'Interesse: Investimento Social',
-        'empreendedorismo': 'Interesse: Empreendedorismo',
-        'inovacao': 'Interesse: Inovação',
-        'saude': 'Interesse: Saúde',
-        'sustentabilidade': 'Interesse: Sustentabilidade',
-        'oportunidades-impacto': 'Interesse: Oportunidades de Impacto'
-      };
-      return map[i];
-    }).filter(Boolean),
-    
-    // Institucional
-    ...(dados.infoInstitucional ? ['Informações Institucionais Neurônio'] : [])
-  ];
-
-  console.log('Segmentações a criar/buscar:', segmentacoesPossiveis);
-
-  // Para cada segmentação, tentar criar ou buscar (simplificado)
-  for (const nomeSegmentacao of segmentacoesPossiveis) {
-    try {
-      
-      // Buscar primeiro se a segmentação já existe
-      console.log(`Processando segmentação: "${nomeSegmentacao}"`);
-      const createUrl = `${API_BASE_URL}/grupos?chave=${encodeURIComponent(API_KEY)}`;
-      
-      const createResponse = await fetchWithRetry(createUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        },
-        body: JSON.stringify({ nome: nomeSegmentacao })
-      });
-
-      const responseText = await createResponse.text();
-      
-      if (responseText.trim().startsWith('{')) {
-        const result = JSON.parse(responseText);
-        if (createResponse.ok && result.data?.id) {
-          segmentacoesIds.push(result.data.id);
-          console.log(`Segmentação "${nomeSegmentacao}" criada:`, result.data.id);
-        }
-      }
-    } catch (error) {
-      console.warn(`Erro ao processar segmentação "${nomeSegmentacao}":`, error.message);
-    }
-    
-    // Pequena pausa entre requisições
-    await new Promise(resolve => setTimeout(resolve, 500));
-  }
-
-  return segmentacoesIds;
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 module.exports = async (req, res) => {
@@ -277,7 +339,7 @@ module.exports = async (req, res) => {
     res.status(500).json({ 
       error: error.message,
       success: false,
-      details: 'O cadastro pode ter sido parcialmente processado. Verifique no Nitronews.'
+      details: 'Verifique os logs para mais detalhes.'
     });
   }
 };
