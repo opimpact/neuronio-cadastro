@@ -23,8 +23,8 @@ async function cadastrarContato(dados) {
     const todasSegmentacoes = prepararListaSegmentacoes(dados);
     console.log('Total de segmentações:', todasSegmentacoes.length);
 
-    // 3. ESTRATÉGIA HÍBRIDA: Processar algumas imediatamente, resto em background
-    const limite = todasSegmentacoes.length <= 5 ? todasSegmentacoes.length : 3;
+    // 3. ESTRATÉGIA HÍBRIDA: Processar mais imediatamente
+    const limite = todasSegmentacoes.length <= 6 ? todasSegmentacoes.length : 6;
     const segmentacoesImediatas = todasSegmentacoes.slice(0, limite);
     const segmentacoesBackground = todasSegmentacoes.slice(limite);
     
@@ -159,10 +159,10 @@ async function criarSegmentacoesRapido(segmentacoes, API_KEY, API_BASE_URL) {
       console.log(`✅ Segmentação prioritária "${nome}" processada: ${id}`);
     }
     
-    // Delay menor para segmentações prioritárias (1.5s)
+    // Delay menor para segmentações prioritárias (1s ao invés de 1.5s)
     if (i < segmentacoes.length - 1) {
-      console.log('Aguardando 1.5s (modo prioritário)...');
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      console.log('Aguardando 1s (modo prioritário)...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
 
