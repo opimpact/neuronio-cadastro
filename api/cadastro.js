@@ -1,4 +1,4 @@
-// api/cadastro.js - Versão Final Otimizada
+// api/cadastro.js - Versão Definitiva: Processa TUDO imediatamente
 const fetch = require('node-fetch');
 
 async function cadastrarContato(dados) {
@@ -14,51 +14,41 @@ async function cadastrarContato(dados) {
   }
 
   try {
+    const startTime = Date.now();
+
     // 1. Processar contato (rápido - ~2s)
     console.log('Processando contato...');
     const contatoId = await processarContato(dados, API_KEY, API_BASE_URL);
     console.log('Contato processado, ID:', contatoId);
 
-    // 2. Preparar lista de segmentações
+    // 2. Preparar TODAS as segmentações
     const todasSegmentacoes = prepararListaSegmentacoes(dados);
-    console.log('Total de segmentações:', todasSegmentacoes.length);
+    console.log('Total de segmentações para processar:', todasSegmentacoes.length);
 
-    // 3. ESTRATÉGIA HÍBRIDA: Processar mais imediatamente
-    const limite = todasSegmentacoes.length <= 6 ? todasSegmentacoes.length : 6;
-    const segmentacoesImediatas = todasSegmentacoes.slice(0, limite);
-    const segmentacoesBackground = todasSegmentacoes.slice(limite);
+    // 3. Processar TODAS as segmentações com otimizações
+    console.log('Processando todas as segmentações com delays otimizados...');
+    const segmentacoesIds = await criarTodasSegmentacoes(todasSegmentacoes, API_KEY, API_BASE_URL);
     
-    console.log(`Processando ${segmentacoesImediatas.length} segmentações imediatamente...`);
-    
-    // 4. Processar segmentações prioritárias (até 10s)
-    const segmentacoesIds = await criarSegmentacoesRapido(segmentacoesImediatas, API_KEY, API_BASE_URL);
-    
-    // 5. Inscrever nas segmentações prioritárias (até 5s)
+    // 4. Inscrever em TODAS as segmentações
     if (segmentacoesIds.length > 0) {
-      console.log('Inscrevendo em segmentações prioritárias...');
-      await inscreverRapido(contatoId, segmentacoesIds, API_KEY, API_BASE_URL);
+      console.log('Inscrevendo em todas as segmentações...');
+      await inscreverEmTodasSegmentacoes(contatoId, segmentacoesIds, API_KEY, API_BASE_URL);
     }
 
-    // 6. Processar resto em background (não bloquear resposta)
-    if (segmentacoesBackground.length > 0) {
-      console.log(`Iniciando processamento background de ${segmentacoesBackground.length} segmentações...`);
-      // Não usar await aqui - deixa rodar em background
-      processarSegmentacoesBackground(contatoId, segmentacoesBackground, API_KEY, API_BASE_URL)
-        .catch(error => console.error('Erro no background:', error));
-    }
-
-    // 7. Responder imediatamente ao usuário
-    const mensagem = segmentacoesBackground.length > 0 
-      ? `Cadastro realizado! ${segmentacoesIds.length} segmentações aplicadas imediatamente. ${segmentacoesBackground.length} sendo processadas em background.`
-      : 'Cadastro realizado com sucesso em todas as segmentações!';
+    const endTime = Date.now();
+    const totalTime = Math.round((endTime - startTime) / 1000);
+    
+    console.log(`=== PROCESSAMENTO CONCLUÍDO ===`);
+    console.log(`Tempo total: ${totalTime}s`);
+    console.log(`Segmentações processadas: ${segmentacoesIds.length}/${todasSegmentacoes.length}`);
 
     return { 
       success: true, 
       contatoId, 
-      segmentacoesImediatas: segmentacoesIds.length,
+      segmentacoesProcessadas: segmentacoesIds.length,
       segmentacoesTotal: todasSegmentacoes.length,
-      temProcessamentoBackground: segmentacoesBackground.length > 0,
-      message: mensagem
+      tempoProcessamento: `${totalTime}s`,
+      message: `Cadastro realizado com sucesso! Inscrito em ${segmentacoesIds.length} segmentações.`
     };
 
   } catch (error) {
@@ -69,7 +59,6 @@ async function cadastrarContato(dados) {
 
 function prepararListaSegmentacoes(dados) {
   const mapeamento = {
-    // PRIORIDADE ALTA (processar primeiro)
     'setor-publico': 'Setor Público',
     'setor-privado': 'Setor Privado', 
     'setor-social': 'Setor Social',
@@ -78,7 +67,6 @@ function prepararListaSegmentacoes(dados) {
     'estudante': 'Estudantes',
     'jornalista': 'Jornalistas',
     'pesquisador': 'Pesquisadores Acadêmicos',
-    // PRIORIDADE BAIXA (processar depois)
     'investimento-social': 'Interesse: Investimento Social',
     'empreendedorismo': 'Interesse: Empreendedorismo',
     'inovacao': 'Interesse: Inovação',
@@ -89,21 +77,21 @@ function prepararListaSegmentacoes(dados) {
 
   const segmentacoes = [];
   
-  // Perfis profissionais primeiro (mais importantes)
+  // Perfis profissionais
   for (const perfil of dados.perfis || []) {
     if (mapeamento[perfil]) {
       segmentacoes.push(mapeamento[perfil]);
     }
   }
 
-  // Interesses depois
+  // Interesses
   for (const interesse of dados.interesses || []) {
     if (mapeamento[interesse]) {
       segmentacoes.push(mapeamento[interesse]);
     }
   }
 
-  // Institucional por último
+  // Institucional
   if (dados.infoInstitucional) {
     segmentacoes.push('Informações Institucionais Neurônio');
   }
@@ -146,34 +134,40 @@ async function processarContato(dados, API_KEY, API_BASE_URL) {
   }
 }
 
-async function criarSegmentacoesRapido(segmentacoes, API_KEY, API_BASE_URL) {
+async function criarTodasSegmentacoes(segmentacoes, API_KEY, API_BASE_URL) {
   const segmentacoesIds = [];
 
   for (let i = 0; i < segmentacoes.length; i++) {
     const nome = segmentacoes[i];
-    console.log(`[PRIORITÁRIO ${i + 1}/${segmentacoes.length}] Processando: "${nome}"`);
+    console.log(`[${i + 1}/${segmentacoes.length}] Processando: "${nome}"`);
     
     const id = await obterOuCriarSegmentacao(nome, API_KEY, API_BASE_URL);
     if (id) {
       segmentacoesIds.push(id);
-      console.log(`✅ Segmentação prioritária "${nome}" processada: ${id}`);
+      console.log(`✅ Segmentação "${nome}" processada: ${id}`);
+    } else {
+      console.log(`❌ Falha ao processar segmentação "${nome}"`);
     }
     
-    // Delay menor para segmentações prioritárias (1s ao invés de 1.5s)
+    // Delay otimizado: 1.5s (compromisso entre velocidade e rate limiting)
     if (i < segmentacoes.length - 1) {
-      console.log('Aguardando 1s (modo prioritário)...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('Aguardando 1.5s...');
+      await new Promise(resolve => setTimeout(resolve, 1500));
     }
   }
 
   return segmentacoesIds;
 }
 
-async function inscreverRapido(contatoId, segmentacoes, API_KEY, API_BASE_URL) {
-  console.log(`Inscrevendo rapidamente em ${segmentacoes.length} segmentações...`);
+async function inscreverEmTodasSegmentacoes(contatoId, segmentacoes, API_KEY, API_BASE_URL) {
+  console.log(`Inscrevendo contato ${contatoId} em ${segmentacoes.length} segmentações...`);
   
+  const sucesso = [];
+  const erros = [];
+
   for (let i = 0; i < segmentacoes.length; i++) {
     const segmentacaoId = segmentacoes[i];
+    console.log(`Inscrevendo [${i + 1}/${segmentacoes.length}]: ${segmentacaoId}`);
     
     try {
       const response = await fetchWithRetry(`${API_BASE_URL}/contatos/${contatoId}/inscrever?chave=${encodeURIComponent(API_KEY)}`, {
@@ -185,87 +179,26 @@ async function inscreverRapido(contatoId, segmentacoes, API_KEY, API_BASE_URL) {
       });
 
       if (response.ok) {
-        console.log(`✅ Inscrito rapidamente: ${segmentacaoId}`);
+        console.log(`✅ Inscrito em: ${segmentacaoId}`);
+        sucesso.push(segmentacaoId);
       } else {
         const result = await response.json();
-        console.warn(`⚠️ Erro rápido em ${segmentacaoId}:`, result.error?.message);
+        console.warn(`⚠️ Erro ao inscrever em ${segmentacaoId}:`, result.error?.message);
+        erros.push(segmentacaoId);
       }
     } catch (error) {
-      console.error(`Erro inscrição rápida ${segmentacaoId}:`, error);
+      console.error(`❌ Erro ao inscrever em ${segmentacaoId}:`, error.message);
+      erros.push(segmentacaoId);
     }
 
-    // Delay pequeno entre inscrições
+    // Delay pequeno entre inscrições (0.8s)
     if (i < segmentacoes.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
   }
-}
 
-async function processarSegmentacoesBackground(contatoId, segmentacoes, API_KEY, API_BASE_URL) {
-  console.log('=== PROCESSAMENTO BACKGROUND INICIADO ===');
-  console.log('Contato:', contatoId);
-  console.log('Segmentações restantes:', segmentacoes.length);
-  
-  try {
-    // Processar segmentações restantes com delay completo (2s)
-    const segmentacoesIds = [];
-
-    for (let i = 0; i < segmentacoes.length; i++) {
-      const nome = segmentacoes[i];
-      console.log(`[BACKGROUND ${i + 1}/${segmentacoes.length}] Processando: "${nome}"`);
-      
-      const id = await obterOuCriarSegmentacao(nome, API_KEY, API_BASE_URL);
-      if (id) {
-        segmentacoesIds.push(id);
-        console.log(`✅ Segmentação background "${nome}" processada: ${id}`);
-      }
-      
-      // Delay completo de 2s conforme recomendação
-      if (i < segmentacoes.length - 1) {
-        console.log('Aguardando 2s (background)...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-    }
-    
-    // Inscrever nas segmentações criadas em background
-    if (segmentacoesIds.length > 0) {
-      console.log(`Inscrevendo em ${segmentacoesIds.length} segmentações background...`);
-      
-      for (let i = 0; i < segmentacoesIds.length; i++) {
-        const segmentacaoId = segmentacoesIds[i];
-        
-        try {
-          const response = await fetchWithRetry(`${API_BASE_URL}/contatos/${contatoId}/inscrever?chave=${encodeURIComponent(API_KEY)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              idGrupos: segmentacaoId
-            })
-          });
-
-          if (response.ok) {
-            console.log(`✅ Inscrito background: ${segmentacaoId}`);
-          } else {
-            const result = await response.json();
-            console.warn(`⚠️ Erro background ${segmentacaoId}:`, result.error?.message);
-          }
-        } catch (error) {
-          console.error(`Erro inscrição background ${segmentacaoId}:`, error);
-        }
-
-        // Delay entre inscrições background
-        if (i < segmentacoesIds.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-    }
-    
-    console.log('=== PROCESSAMENTO BACKGROUND CONCLUÍDO ===');
-    console.log('Segmentações processadas em background:', segmentacoesIds.length);
-    
-  } catch (error) {
-    console.error('Erro no processamento background:', error);
-  }
+  console.log(`Inscrições concluídas: ${sucesso.length} sucessos, ${erros.length} erros`);
+  return { sucesso, erros };
 }
 
 async function obterOuCriarSegmentacao(nome, API_KEY, API_BASE_URL) {
