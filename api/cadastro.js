@@ -244,11 +244,11 @@ async function fetchWithRetry(url, options = {}, maxRetries = 3) {
     try {
       const response = await fetch(url, options);
       
-      // Rate limiting específico
+      // Rate limiting específico - delay maior para recuperação
       if (response.status === 429) {
         console.log(`⚠️ Rate limit atingido (tentativa ${attempt}/${maxRetries})`);
         if (attempt < maxRetries) {
-          const backoffDelay = 3000 + (attempt * 1000); // 3s, 4s, 5s
+          const backoffDelay = 5000 + (attempt * 2000); // 5s, 7s, 9s
           console.log(`Aguardando ${backoffDelay/1000}s para retry...`);
           await new Promise(resolve => setTimeout(resolve, backoffDelay));
           attempt++;
