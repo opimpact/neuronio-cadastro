@@ -1,4 +1,4 @@
-// api/cadastro.js - Versão Definitiva: Processa TUDO imediatamente
+// api/cadastro.js - Versão Otimizada Final
 const fetch = require('node-fetch');
 
 async function cadastrarContato(dados) {
@@ -25,8 +25,8 @@ async function cadastrarContato(dados) {
     const todasSegmentacoes = prepararListaSegmentacoes(dados);
     console.log('Total de segmentações para processar:', todasSegmentacoes.length);
 
-    // 3. Processar TODAS as segmentações com otimizações
-    console.log('Processando todas as segmentações com delays otimizados...');
+    // 3. Processar TODAS as segmentações seguindo recomendações oficiais
+    console.log('Processando todas as segmentações com delays de 2s...');
     const segmentacoesIds = await criarTodasSegmentacoes(todasSegmentacoes, API_KEY, API_BASE_URL);
     
     // 4. Inscrever em TODAS as segmentações
@@ -149,10 +149,10 @@ async function criarTodasSegmentacoes(segmentacoes, API_KEY, API_BASE_URL) {
       console.log(`❌ Falha ao processar segmentação "${nome}"`);
     }
     
-    // Delay otimizado: 1.5s (compromisso entre velocidade e rate limiting)
+    // DELAY DE 2 SEGUNDOS conforme recomendação OFICIAL do Nitronews
     if (i < segmentacoes.length - 1) {
-      console.log('Aguardando 1.5s...');
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      console.log('Aguardando 2s (recomendação oficial)...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
 
@@ -191,9 +191,10 @@ async function inscreverEmTodasSegmentacoes(contatoId, segmentacoes, API_KEY, AP
       erros.push(segmentacaoId);
     }
 
-    // Delay pequeno entre inscrições (0.8s)
+    // Delay de 1.5s entre inscrições (um pouco menor já que são requisições mais simples)
     if (i < segmentacoes.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 800));
+      console.log('Aguardando 1.5s...');
+      await new Promise(resolve => setTimeout(resolve, 1500));
     }
   }
 
@@ -203,7 +204,7 @@ async function inscreverEmTodasSegmentacoes(contatoId, segmentacoes, API_KEY, AP
 
 async function obterOuCriarSegmentacao(nome, API_KEY, API_BASE_URL) {
   try {
-    // Buscar existente
+    // Buscar existente primeiro
     const searchResponse = await fetchWithRetry(`${API_BASE_URL}/grupos?chave=${encodeURIComponent(API_KEY)}&nome=${encodeURIComponent(nome)}`);
     const searchResult = await searchResponse.json();
 
@@ -212,7 +213,7 @@ async function obterOuCriarSegmentacao(nome, API_KEY, API_BASE_URL) {
       return searchResult.data[0].id;
     }
 
-    // Criar nova
+    // Criar nova se não existir
     console.log(`Criando nova segmentação: "${nome}"`);
     const createResponse = await fetchWithRetry(`${API_BASE_URL}/grupos?chave=${encodeURIComponent(API_KEY)}`, {
       method: 'POST',
@@ -243,10 +244,13 @@ async function fetchWithRetry(url, options = {}, maxRetries = 3) {
     try {
       const response = await fetch(url, options);
       
+      // Rate limiting específico
       if (response.status === 429) {
-        console.log(`Rate limit atingido (tentativa ${attempt}), aguardando 3s...`);
+        console.log(`⚠️ Rate limit atingido (tentativa ${attempt}/${maxRetries})`);
         if (attempt < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          const backoffDelay = 3000 + (attempt * 1000); // 3s, 4s, 5s
+          console.log(`Aguardando ${backoffDelay/1000}s para retry...`);
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
           attempt++;
           continue;
         }
@@ -255,9 +259,11 @@ async function fetchWithRetry(url, options = {}, maxRetries = 3) {
       return response;
       
     } catch (error) {
-      console.error(`Erro na tentativa ${attempt}:`, error.message);
+      console.error(`❌ Erro na tentativa ${attempt}/${maxRetries}:`, error.message);
       if (attempt < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        const retryDelay = 1000 * attempt; // 1s, 2s, 3s
+        console.log(`Aguardando ${retryDelay/1000}s para retry...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
         attempt++;
       } else {
         throw error;
@@ -267,6 +273,7 @@ async function fetchWithRetry(url, options = {}, maxRetries = 3) {
 }
 
 module.exports = async (req, res) => {
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -284,6 +291,9 @@ module.exports = async (req, res) => {
     res.status(200).json(resultado);
   } catch (error) {
     console.error('Erro na API:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 };
