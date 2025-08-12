@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/cadastro.js": {
-      "maxDuration": 120
+      "maxDuration": 150
     }
   },
   "headers": [
