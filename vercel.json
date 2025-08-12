@@ -4,6 +4,12 @@
       "maxDuration": 150
     }
   },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",
