@@ -1,4 +1,4 @@
-// api/cadastro.js - Versão otimizada com rate limiting correto
+// api/cadastro.js - Versão completa com correção na inscrição
 async function cadastrarContato(dados) {
   const API_BASE_URL = 'https://api.criaenvio.com/v1';
   const API_KEY = process.env.NITRONEWS_API_KEY;
@@ -246,32 +246,45 @@ async function inscreverNasSegmentacoes(contatoId, segmentacoes, API_KEY, API_BA
   
   console.log(`Inscrevendo contato ${contatoId} nas ${segmentacoes.length} segmentações...`);
   
-  try {
-    const inscricaoUrl = `${API_BASE_URL}/contatos/${contatoId}/inscrever?chave=${encodeURIComponent(API_KEY)}`;
+  let sucessos = 0;
+  
+  for (let i = 0; i < segmentacoes.length; i++) {
+    const segmentacaoId = segmentacoes[i];
+    console.log(`Inscrevendo na segmentação ${i + 1}/${segmentacoes.length}: ${segmentacaoId}`);
     
-    const inscricaoResponse = await fetchComRateLimit(inscricaoUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'User-Agent': 'Neuronio-Form/1.0'
-      },
-      body: JSON.stringify({
-        idGrupos: segmentacoes.join(', ')
-      })
-    });
+    try {
+      const inscricaoUrl = `${API_BASE_URL}/contatos/${contatoId}/inscrever?chave=${encodeURIComponent(API_KEY)}`;
+      
+      const inscricaoResponse = await fetchComRateLimit(inscricaoUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'Neuronio-Form/1.0'
+        },
+        body: JSON.stringify({
+          idGrupos: segmentacaoId
+        })
+      });
 
-    if (inscricaoResponse.ok) {
-      console.log('✅ Inscrição realizada com sucesso');
-      return true;
-    } else {
-      console.warn('⚠️ Problema na inscrição, status:', inscricaoResponse.status);
-      return false;
+      if (inscricaoResponse.ok) {
+        console.log(`✅ Inscrito na segmentação ${segmentacaoId}`);
+        sucessos++;
+      } else {
+        console.warn(`⚠️ Falha na segmentação ${segmentacaoId}, status:`, inscricaoResponse.status);
+      }
+    } catch (error) {
+      console.error(`❌ Erro na segmentação ${segmentacaoId}:`, error.message);
     }
-  } catch (error) {
-    console.error('❌ Erro na inscrição:', error.message);
-    return false;
+    
+    // Delay entre inscrições
+    if (i < segmentacoes.length - 1) {
+      await sleep(1000);
+    }
   }
+  
+  console.log(`Inscrições concluídas: ${sucessos}/${segmentacoes.length}`);
+  return sucessos > 0;
 }
 
 async function fetchComRateLimit(url, options = {}, maxRetries = 3) {
