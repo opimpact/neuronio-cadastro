@@ -4,5 +4,13 @@
   "description": "Formulário de cadastro integrado com Nitronews",
   "engines": {
     "node": "22.x"
+  },
+  "dependencies": {
+    "node-fetch": "^2.7.0"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'Build completed'",
+    "start": "vercel dev"
   }
 }
