@@ -3,62 +3,231 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>API Neurônio - Status</title>
+    <title>Teste API Neurônio</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            padding: 20px;
             margin: 0;
             color: white;
         }
         .container {
-            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
             background: rgba(255, 255, 255, 0.1);
-            padding: 40px;
+            padding: 30px;
             border-radius: 20px;
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
-        h1 {
-            font-size: 2.5em;
-            margin-bottom: 20px;
-        }
-        .status {
-            font-size: 1.2em;
-            margin-bottom: 30px;
-            opacity: 0.9;
-        }
-        .endpoint {
+        h1 { text-align: center; margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { 
+            width: 100%; 
+            padding: 10px; 
+            border: none; 
+            border-radius: 8px; 
             background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 14px;
+        }
+        input::placeholder { color: rgba(255, 255, 255, 0.7); }
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .checkbox-item input { width: auto; margin-right: 8px; }
+        button {
+            width: 100%;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        button:hover { transform: translateY(-2px); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .result {
+            margin-top: 20px;
             padding: 15px;
             border-radius: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            white-space: pre-wrap;
             font-family: 'Courier New', monospace;
-            font-size: 1.1em;
+            font-size: 12px;
         }
-        .badge {
-            background: #10b981;
-            color: white;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            margin-top: 20px;
-            display: inline-block;
-        }
+        .success { border-left: 4px solid #10b981; }
+        .error { border-left: 4px solid #ef4444; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🚀 API Neurônio</h1>
-        <div class="status">Sistema de cadastro integrado com Nitronews</div>
-        <div class="endpoint">
-            <strong>Endpoint:</strong><br>
-            POST /api/cadastro
-        </div>
-        <div class="badge">✅ ONLINE</div>
+        <h1>🧪 Teste API Neurônio</h1>
+        
+        <form id="testForm">
+            <div class="form-group">
+                <label>URL da API:</label>
+                <input type="url" id="apiUrl" value="https://seu-projeto.vercel.app/api/cadastro" required>
+            </div>
+
+            <div class="form-group">
+                <label>Nome:</label>
+                <input type="text" id="nome" value="João Teste" required>
+            </div>
+
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" id="email" value="joao.teste@exemplo.com" required>
+            </div>
+
+            <div class="form-group">
+                <label>Telefone:</label>
+                <input type="tel" id="telefone" value="(11) 99999-9999">
+            </div>
+
+            <div class="form-group">
+                <label>Empresa:</label>
+                <input type="text" id="empresa" value="Empresa Teste">
+            </div>
+
+            <div class="form-group">
+                <label>Cargo:</label>
+                <input type="text" id="cargo" value="Desenvolvedor">
+            </div>
+
+            <div class="form-group">
+                <label>Cidade:</label>
+                <input type="text" id="cidade" value="São Paulo">
+            </div>
+
+            <div class="form-group">
+                <label>Estado:</label>
+                <input type="text" id="estado" value="SP">
+            </div>
+
+            <div class="form-group">
+                <label>Perfis Profissionais:</label>
+                <div class="checkbox-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" value="setor-publico" name="perfis">
+                        <span>Setor Público</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" value="setor-privado" name="perfis">
+                        <span>Setor Privado</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" value="empreendedor" name="perfis" checked>
+                        <span>Empreendedor</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" value="consultor" name="perfis">
+                        <span>Consultor</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Interesses:</label>
+                <div class="checkbox-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" value="inovacao" name="interesses" checked>
+                        <span>Inovação</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" value="sustentabilidade" name="interesses" checked>
+                        <span>Sustentabilidade</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" value="empreendedorismo" name="interesses">
+                        <span>Empreendedorismo</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="infoInstitucional" checked>
+                    <span>Receber informações institucionais da Neurônio</span>
+                </div>
+            </div>
+
+            <button type="submit" id="submitBtn">🚀 Testar API</button>
+        </form>
+
+        <div id="result" class="result" style="display: none;"></div>
     </div>
+
+    <script>
+        document.getElementById('testForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const resultDiv = document.getElementById('result');
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Testando...';
+            resultDiv.style.display = 'none';
+            
+            try {
+                const apiUrl = document.getElementById('apiUrl').value;
+                
+                // Coletar dados do formulário
+                const dados = {
+                    nome: document.getElementById('nome').value,
+                    email: document.getElementById('email').value,
+                    telefone: document.getElementById('telefone').value,
+                    empresa: document.getElementById('empresa').value,
+                    cargo: document.getElementById('cargo').value,
+                    cidade: document.getElementById('cidade').value,
+                    estado: document.getElementById('estado').value,
+                    perfis: Array.from(document.querySelectorAll('input[name="perfis"]:checked')).map(el => el.value),
+                    interesses: Array.from(document.querySelectorAll('input[name="interesses"]:checked')).map(el => el.value),
+                    infoInstitucional: document.getElementById('infoInstitucional').checked
+                };
+                
+                console.log('Enviando dados:', dados);
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(dados)
+                });
+                
+                const result = await response.json();
+                
+                resultDiv.innerHTML = `Status: ${response.status}\n\nResposta:\n${JSON.stringify(result, null, 2)}`;
+                resultDiv.className = response.ok ? 'result success' : 'result error';
+                resultDiv.style.display = 'block';
+                
+            } catch (error) {
+                resultDiv.innerHTML = `Erro na requisição:\n${error.message}`;
+                resultDiv.className = 'result error';
+                resultDiv.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🚀 Testar API';
+            }
+        });
+    </script>
 </body>
 </html>
