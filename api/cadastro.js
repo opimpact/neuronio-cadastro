@@ -77,10 +77,15 @@ function prepararListaSegmentacoes(dados) {
 
   const segmentacoes = [];
   
+  console.log('Dados recebidos para mapeamento:', dados);
+  
   // Perfis profissionais
   for (const perfil of dados.perfis || []) {
     if (mapeamento[perfil]) {
       segmentacoes.push(mapeamento[perfil]);
+      console.log(`Mapeado perfil: ${perfil} -> ${mapeamento[perfil]}`);
+    } else {
+      console.warn(`Perfil não mapeado: ${perfil}`);
     }
   }
 
@@ -88,14 +93,19 @@ function prepararListaSegmentacoes(dados) {
   for (const interesse of dados.interesses || []) {
     if (mapeamento[interesse]) {
       segmentacoes.push(mapeamento[interesse]);
+      console.log(`Mapeado interesse: ${interesse} -> ${mapeamento[interesse]}`);
+    } else {
+      console.warn(`Interesse não mapeado: ${interesse}`);
     }
   }
 
   // Institucional
   if (dados.infoInstitucional) {
     segmentacoes.push('Informações Institucionais Neurônio');
+    console.log('Adicionada segmentação institucional');
   }
 
+  console.log('Segmentações finais preparadas:', segmentacoes);
   return segmentacoes;
 }
 
