@@ -275,15 +275,40 @@ async function fetchWithRetry(url, options = {}, maxRetries = 3) {
 module.exports = async (req, res) => {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      message: 'API Neurônio - Cadastro Nitronews',
+      endpoint: 'POST /api/cadastro',
+      status: 'online',
+      version: '1.0.0',
+      usage: {
+        method: 'POST',
+        contentType: 'application/json',
+        body: {
+          nome: 'string (obrigatório)',
+          email: 'string (obrigatório)',
+          telefone: 'string (opcional)',
+          empresa: 'string (opcional)',
+          cargo: 'string (opcional)',
+          cidade: 'string (opcional)',
+          estado: 'string (opcional)',
+          perfis: 'array (opcional) - ex: ["setor-publico", "empreendedor"]',
+          interesses: 'array (opcional) - ex: ["inovacao", "sustentabilidade"]',
+          infoInstitucional: 'boolean (opcional)'
+        }
+      }
+    });
+  }
+
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método não permitido' });
+    return res.status(405).json({ error: 'Método não permitido. Use POST.' });
   }
 
   try {
